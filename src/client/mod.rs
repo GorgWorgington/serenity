@@ -56,12 +56,15 @@ pub use crate::cache::Cache;
 use crate::cache::Settings as CacheSettings;
 #[cfg(feature = "framework")]
 use crate::framework::Framework;
+use crate::gateway::CurrentPresence;
 use crate::http::Http;
 use crate::internal::prelude::*;
+use crate::model::gateway::Activity;
 #[cfg(feature = "gateway")]
 use crate::model::gateway::GatewayIntents;
 use crate::model::id::ApplicationId;
 pub use crate::CacheAndHttp;
+use crate::model::user::OnlineStatus;
 
 /// A builder implementing [`Future`] building a [`Client`] to interact with Discord.
 #[cfg(feature = "gateway")]
@@ -73,6 +76,7 @@ pub struct ClientBuilder {
     http: Option<Http>,
     fut: Option<BoxFuture<'static, Result<Client>>>,
     intents: GatewayIntents,
+    current_presence: Option<CurrentPresence>,
     #[cfg(feature = "cache")]
     cache_settings: Option<CacheSettings>,
     #[cfg(feature = "framework")]
@@ -91,6 +95,7 @@ impl ClientBuilder {
             http: Some(http),
             fut: None,
             intents,
+            current_presence: None,
             #[cfg(feature = "cache")]
             cache_settings: Some(CacheSettings::new()),
             #[cfg(feature = "framework")]
@@ -310,6 +315,12 @@ impl ClientBuilder {
         self.intents
     }
 
+    pub fn presence(mut self, activity: Option<Activity>, status: OnlineStatus) -> Self {
+        self.current_presence = Some((activity, status));
+
+        self
+    }
+
     /// Sets an event handler with multiple methods for each possible event.
     pub fn event_handler<H: EventHandler + 'static>(mut self, event_handler: H) -> Self {
         self.event_handler = Some(Arc::new(event_handler));
@@ -363,6 +374,11 @@ impl Future for ClientBuilder {
             let event_handler = self.event_handler.take();
             let raw_event_handler = self.raw_event_handler.take();
             let intents = self.intents;
+            let current_presence: CurrentPresence = if let Some(cp) = &self.current_presence {
+                cp.clone()
+            } else {
+                (None, OnlineStatus::Online)
+            };
 
             let mut http = self.http.take().unwrap();
             if let Some(event_handler) = event_handler.clone() {
@@ -406,6 +422,7 @@ impl Future for ClientBuilder {
                         ws_url: &ws_url,
                         cache_and_http: &cache_and_http,
                         intents,
+                        current_presence,
                     })
                     .await
                 };

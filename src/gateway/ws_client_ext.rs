@@ -31,6 +31,7 @@ pub trait WebSocketGatewayClientExt {
         shard_info: &[u64; 2],
         token: &str,
         intents: GatewayIntents,
+        current_presence: &CurrentPresence,
     ) -> Result<()>;
 
     async fn send_presence_update(
@@ -100,7 +101,11 @@ impl WebSocketGatewayClientExt for WsStream {
         shard_info: &[u64; 2],
         token: &str,
         intents: GatewayIntents,
+        current_presence: &CurrentPresence,
     ) -> Result<()> {
+        let &(ref activity, ref status) = current_presence;
+        let now = SystemTime::now();
+
         debug!("[Shard {:?}] Identifying", shard_info);
 
         self.send_json(&json!({
@@ -111,6 +116,16 @@ impl WebSocketGatewayClientExt for WsStream {
                 "shard": shard_info,
                 "token": token,
                 "intents": intents,
+                "presence": {
+                    "afk": false,
+                    "since": now,
+                    "status": status.name(),
+                    "game": activity.as_ref().map(|x| json!({
+                        "name": x.name,
+                        "type": x.kind,
+                        "url": x.url,
+                    })),
+                },
                 "v": constants::GATEWAY_VERSION,
                 "properties": {
                     "$browser": "serenity",
